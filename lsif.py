@@ -29,16 +29,12 @@ def normNg(theta,g_hat,h_hat,stop):
 numpy.random.seed(123)
 
 num_theta = 500
-stop = 3.0
+stop = 2.0
 scale=3.
 sample_entry = randn(500) * scale + 3
 sample_hospital = randn(500) * scale + 1
 num_group = 20
-n_fold_entry = 
-n_fold_hospital =
 
-sample_entries = [sample_entry[i:i+n_fold] for i in range(num_group)]
-sample_hospitals = [sample_hospital[i:i+n_fold] for i in range(num_group)]
 
 
 g_hat = numpy.matrix(numpy.zeros((num_theta,num_theta)),dtype=float)
