@@ -2,77 +2,194 @@
 # Kullback-Leibler Importance Estimation Procedure
 from scipy.stats import binom
 import pandas as pd
-import numpy
+import numpy as np
 import sys
 from scipy.stats import norm
 from numpy.random import *
-import theano
-import theano.tensor as T
 import math
-def f(x):
-    return norm.pdf(sample_entry,loc=2,scale=2)
-def optimize2():
-    x = 1.0   
-    delta = 100
-    for i in range(10000000):
-        x -= delta * gPosterior(x,10,10)
-        delta *= 0.99999
-        if i % 1000 == 0:
-            print "--------- %d ---------"%(i)
-            print x
-            print delta
-    return x
+import matplotlib.pyplot as plt
+from sklearn.cross_validation import KFold
+from scipy.optimize import minimize
+
+class KLIEP:
+    """
+        r(sample_Y) = P(sample_X) / P(sample_Y)
+    """
     
+    def __init__(self, band_width, n_kernel_fold=10, learning_rate=1e-2, n_iter=10000, tol=1e-5):
+        self.band_width = band_width
+        self.n_kernel_fold = n_kernel_fold
+        self.learning_rate = learning_rate
+        self.n_iter = n_iter
+        self.tol = tol
+        self.kernel_param = -1 / (2 * self.band_width ** 2)
+        
+    def kernel(self, X):
+        result = []
+        for X2 in self.sample_kernel_fold:
+            diff_vec = X - X2
+            result.append(np.exp(-np.sqrt(np.dot(diff_vec, diff_vec)) / (2*self.band_width**2)))
+        return np.array(result)
+    
+    def _score(self, theta, sample_entry, sample_hospital):
+        r_hospital = np.matrix(np.zeros(1))
+        for each_sample in sample_hospital:
+            r_hospital += theta * np.matrix(self.kernel(each_sample)).T
+        r_hospital /= sample_hospital.shape[0]
+        
+        r_entry = np.matrix(np.zeros(1))
+        for each_sample in sample_entry:
+            r_entry += np.dot(theta, self.kernel(each_sample))
+        r_entry /= sample_entry.shape[0]
+        
+        return r_hospital[0, 0] - r_entry[0, 0]
+        
+    def score(self, sample_entry, sample_hospital):
+        return self._score(self.theta, sample_entry, sample_hospital)
+        
+    def differentialTargetFunction(self, thetas, sampleEntry, sampleHospital):
+        sum_basis_result2 = np.matrix(np.zeros(thetas.shape[1]))
+        for basis_result in self.basis_results:
+            sum_basis_result2 += basis_result / (thetas * basis_result.T)
+        sum_basis_result2 /= sampleEntry.shape[0]
+        
+        return self.sum_basis_result  - sum_basis_result2
+        
+    def fit(self, sample_X, sample_Y):
+        self.sample_kernel_fold = sample_X[:self.n_kernel_fold]
+        self.theta = np.matrix( np.random.rand(self.n_kernel_fold))
+        theta_previous = self.theta
+        error_previous = float('inf')
+        
+        basis_result = [self.kernel(sample) for sample in sample_Y]
+        self.sum_basis_result = np.average(basis_result, axis=0)
+        self.basis_results = [np.matrix(self.kernel(sample)) for sample in sample_X]
+        
+        for i in range(self.n_iter):
+            self.theta -= self.learning_rate * self.differentialTargetFunction(self.theta, sample_X, sample_Y)
+            
+            if i % 500 == 0:
+                error_cur = self.score(sample_X, sample_Y)
+                print("%d / %d (%f)"%(i, self.n_iter, error_previous - error_cur))
+                print(self.theta)
+                error_previous = error_cur
+        
+    def predict(self, sample):
+        result = []
+        for x2 in sample:
+            r = np.dot(self.theta, self.kernel(x2))
+            result.append(r[0, 0])
+            
+        return np.array(result)
+        
 def optimize(num_theta,sampleEntry,sampleHospital):
-    theta = numpy.matrix( randn(num_theta) )
-    delta = 0.09
-    for i in range(100000):
+    theta = np.matrix( randn(num_theta) * 0.5 )
+    delta = 0.02
+    error_previous = float('inf')
+    
+    for i in range(1500):
         theta -= delta * differentialTargetFunction(theta,sampleEntry,sampleHospital)
         if i % 100 == 0:
-            print "--------- %d ---------"%(i)
-            print theta
+            error_cur = errorFunction(theta, sampleEntry[:theta.shape[1]], sampleEntry, sampleHospital, band_width)
+            if error_previous < error_cur:
+                raise Exception('Failed learning')
+                
+            if error_previous - error_cur < 1e-5:
+                break
+            
+            print("--------- %d ---------"%(i))
+            print(error_previous - error_cur)
+            print(theta)
+            error_previous = error_cur
+            
     return theta
 
-def kernel(x,x2):
-    h=4.
-    return numpy.exp(-numpy.sqrt((x-x2)**2)/(2*h**2))
+def errorFunction(theta, kernel_sample, sample_entry, sample_hospital, band_width):
+    r_hospital = np.matrix(np.zeros(1))
+    for each_sample in sample_hospital:
+        r_hospital += theta * np.matrix(kernel(each_sample, kernel_sample, band_width)).T
+    r_hospital /= sample_hospital.shape[0]
+    
+    r_entry = np.matrix(np.zeros(1))
+    for each_sample in sample_entry:
+        r_entry += np.dot(theta, kernel(each_sample, kernel_sample, band_width))
+    r_entry /= sample_entry.shape[0]
+    
+    return r_hospital[0, 0] - r_entry[0, 0]
+    
+def kernel2(x, x2, band_width):
+    h = band_width
+    return np.exp(-np.sqrt((x-x2)**2)/(2*h**2))
+    
+def kernel(x, x2, band_width):
+    h = band_width
+    result = []
+    for vec in x2:
+        diff_vec = x - vec
+        result.append(np.exp(-np.sqrt(np.dot(diff_vec, diff_vec)) / (2*h**2)))
+    return np.array(result)
 
 def model(x,sampleEntry,thetas):
 
     sample = []
     for x2 in x:
-        r = thetas * numpy.matrix(kernel(x2,sampleEntry[:thetas.shape[1]])).T
+        r = thetas * np.matrix(kernel(x2,sampleEntry[:thetas.shape[1]], band_width)).T
         sample.append(r[0,0])
-    return numpy.array(sample)
+    return np.array(sample)
 
 def differentialTargetFunction(thetas,sampleEntry,sampleHospital):
-    basis_result = [kernel(sample,sampleEntry[:thetas.shape[1]]) for sample in sampleHospital]
-    sum_basis_result = numpy.average(basis_result,axis=0)
+    basis_result = [kernel(sample,sampleEntry[:thetas.shape[1]], band_width) for sample in sampleHospital]
+    sum_basis_result = np.average(basis_result,axis=0)
     
-    sum_basis_result2 = numpy.matrix(numpy.zeros(thetas.shape[1]))
+    sum_basis_result2 = np.matrix(np.zeros(thetas.shape[1]))
     for sample in sampleEntry:
-        basis_result = numpy.matrix(kernel(sample,sampleEntry[:thetas.shape[1]]))
+        basis_result = np.matrix(kernel(sample,sampleEntry[:thetas.shape[1]], band_width))
         sum_basis_result2 += basis_result / (thetas * basis_result.T)
     sum_basis_result2 /= sampleEntry.shape[0]
     
     return sum_basis_result - sum_basis_result2
 
-x = T.dscalar('x')
-u = T.dscalar('u')
-sigma = T.dscalar('sigma')
-normalPdfSyntax = -(1./(T.sqrt(2*math.pi*sigma)) * T.exp(-(x-u)**2/(2*sigma)))
-posterior = theano.function(inputs=[x,u,sigma], outputs=normalPdfSyntax)
-#事後分布の導関数を生成
-gPosteriorSyntax = T.grad(cost=normalPdfSyntax, wrt=x)
-gPosterior = theano.function(inputs=[x,u,sigma], outputs=gPosteriorSyntax)
-optimize2()
-sys.exit(1)
-sample_entry = randn(200) * 2 + 2
-sample_hospital = randn(200) * 2 + 1
-thetas = optimize(10,sample_entry,sample_hospital)
+if __name__ == "__main__":
+    #np.random.seed(123)
 
-prob = norm.pdf(sample_entry,loc=2,scale=2) / norm.pdf(sample_hospital,loc=1,scale=2)
-prob2 = model(sample_hospital,sample_entry,thetas)
-for row1,row2 in zip(prob,prob2):
-    print "True Value:%f Estimate Value:%f"%(row1,row2)
+    n_sample_entry = 1000
+    n_sample_hospital = 1000
+    sample_entry = randn(n_sample_entry, 1) * 2 + 2
+    sample_hospital = randn(n_sample_hospital, 1) * 2 + 1
+    n_test = int(sample_entry.shape[0] * 0.3)
+
+    n_fold = 10
+
+    min_error = float('inf')
+    for band_width in np.linspace(1, 10, 10):
+        print band_width
+        kliep = KLIEP(band_width, learning_rate=5e-2)
+
+        mean_score = 0.
+        for i, ((hospital_train, hospital_test), (entry_train, entry_test)) in enumerate(zip(KFold(sample_hospital.shape[0], n_folds=n_fold), KFold(sample_entry.shape[0], n_folds=n_fold))):
+            if i > 3:
+                break
+                
+            sample_hospital_train, sample_hospital_test = sample_hospital[hospital_train], sample_hospital[hospital_test]
+            sample_entry_train, sample_entry_test = sample_entry[entry_train], sample_entry[entry_test]
+            kliep.fit(sample_entry_train, sample_hospital_train)
+            cur_score = kliep.score(sample_entry_test, sample_hospital_test)
+            print "cur_score:", cur_score
+            mean_score += cur_score
+        mean_score /= n_fold
+        
+        print "band_width:", band_width, "mean_score:", mean_score
+        if min_error > mean_score:
+            min_error = mean_score
+            min_param = band_width
+        
+    band_width = 2.5
+    print "best band_width", band_width
+    kliep = KLIEP(band_width, learning_rate=1e-1, n_iter=100000)
+    kliep.fit(sample_entry, sample_hospital)
+    est_ratio = kliep.predict(sample_hospital)
+    true_ratio = norm.pdf(sample_hospital,loc=2,scale=2) / norm.pdf(sample_hospital,loc=1,scale=2)
+    plt.scatter(est_ratio, true_ratio)
+    plt.show()
+    
 
