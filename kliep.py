@@ -152,8 +152,8 @@ def differentialTargetFunction(thetas,sampleEntry,sampleHospital):
 if __name__ == "__main__":
     #np.random.seed(123)
 
-    n_sample_entry = 1000
-    n_sample_hospital = 1000
+    n_sample_entry = 500
+    n_sample_hospital = 500
     sample_entry = randn(n_sample_entry, 1) * 2 + 2
     sample_hospital = randn(n_sample_hospital, 1) * 2 + 1
     n_test = int(sample_entry.shape[0] * 0.3)
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     n_fold = 10
 
     min_error = float('inf')
-    for band_width in np.linspace(1, 10, 10):
+    for band_width in np.linspace(1, 10, 0):
         print band_width
         kliep = KLIEP(band_width, learning_rate=5e-2)
 
