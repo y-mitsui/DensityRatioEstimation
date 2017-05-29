@@ -27,14 +27,14 @@ if __name__ == "__main__":
     sample_denominator_train = sample_denominator[:-n_test]
     sample_denominator_test = sample_denominator[n_test:]
     
-    print "start hyper parameter tuning"
+    print("start hyper parameter tuning")
     min_error = float('inf')
     for band_width in np.linspace(2.5, 5, 3):
         for regulation in  np.linspace(5e-2, 2, 3):
             lsif = LSIF(band_width, regulation)
             lsif.fit(sample_molecule_train, sample_denominator_train)
             score = lsif.score(sample_molecule_test, sample_denominator_test)
-            print "score %f band_width:%f regulation:%f"%(score, band_width, regulation)
+            print("score %f band_width:%f regulation:%f"%(score, band_width, regulation))
             
             if min_error > score:
                 min_error = score
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     plt.xlabel(" estimate values")
     plt.ylabel(" true values")
     plt.grid(True)
-    plt.scatter(prob_est, prob_true)
+    plt.scatter(prob_est, prob_true, alpha=0.2)
     plt.xlim(0, 2)
     plt.ylim(0, 2)
     plt.show()
