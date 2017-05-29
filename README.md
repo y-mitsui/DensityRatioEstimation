@@ -10,8 +10,6 @@ Python liblary of the Density Ratio Estimation (Sugiyama).
 r(sample) = P_x(sample) / P_y(sample)
 ```
 
-* License: New BSD
-
 
 ## Usage
 Read example.py.

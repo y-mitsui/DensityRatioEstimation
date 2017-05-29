@@ -2,6 +2,8 @@
 Created on 2017/05/29
 
 '''
+from __future__ import print_function
+from __future__ import division
 import numpy as np
 from lsif import LSIF
 from scipy.stats import norm
@@ -52,7 +54,7 @@ if __name__ == "__main__":
     plt.xlabel(" estimate values")
     plt.ylabel(" true values")
     plt.grid(True)
-    plt.scatter(prob_est, prob_true, alpha=0.2)
+    plt.scatter(prob_est, prob_true, alpha=0.1)
     plt.xlim(0, 2)
     plt.ylim(0, 2)
     plt.show()
