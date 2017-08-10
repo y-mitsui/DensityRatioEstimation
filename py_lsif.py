@@ -46,12 +46,13 @@ class LSIF:
         return 0.5 * theta.T * g_hat * theta - theta.T * h_hat.T
 
     def score(self, sample_X, sample_Y):
-        g_hat = self.estGHat(sample_X)
-        h_hat = self.estHHat(sample_Y)
+        g_hat = self.estGHat(sample_Y)
+        h_hat = self.estHHat(sample_X)
         return self._score(self.thetas, g_hat, h_hat) 
         
     def fit(self, sample_X, sample_Y):
         self.n_kernel_fold = sample_X.shape[0]
+        self.n_kernel_fold = 100
         self.sample_kernel_fold = sample_X[:self.n_kernel_fold]
         g_hat = self.estGHat(sample_Y)
         h_hat = self.estHHat(sample_X)
